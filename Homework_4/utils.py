@@ -182,7 +182,7 @@ def polynomialRegressorError(test_set: typing.Tuple[np.ndarray, np.ndarray], the
     x_test, y_test = test_set
     k = theta.shape[0]
     phi_x = classicalVandermondeMatrix(x_test, k)
-    f_theta = phi_x @ theta.reshape(-1, 1)
+    f_theta = phi_x @ theta
     return averageAbsoluteError(y_test, f_theta)
 
 
@@ -231,8 +231,8 @@ def MAPPolynomlialRegressionLossGradient(data: typing.Tuple[np.ndarray, np.ndarr
 
 def MLEPolynomialRegression(data: typing.Tuple[np.ndarray, np.ndarray], k: int, sigma_estimate: float,
                             solving_strategy: str = "exact", alpha: float = 1e-3, kmax: int = 5000) -> np.ndarray:
-    assert solving_strategy in ["exact", "gd", "sgd"], \
-        "Solving strategy must be one among \"exact\", \"gd\", and \"sgd\""
+    assert solving_strategy in ["exact", "gd", "sgd", "rmsprop", "adam"], \
+        "Solving strategy must be one among \"exact\", \"gd\", \"sgd\", \"rmsprop\", and \"adam\""
 
     x, y = data
     phi_x = classicalVandermondeMatrix(x, k)
@@ -242,14 +242,27 @@ def MLEPolynomialRegression(data: typing.Tuple[np.ndarray, np.ndarray], k: int, 
 
         return theta
 
-    elif solving_strategy == "gd":
+    loss = lambda t: MLEPolynomlialRegressionLoss(data, t, sigma_estimate)
+    loss_gradient = lambda t: MLEPolynomlialRegressionLossGradient(data, t, sigma_estimate)
+
+    if solving_strategy == "gd":
         theta = np.random.random((k,))
-        loss = lambda t: MLEPolynomlialRegressionLoss(data, t, sigma_estimate)
-        loss_gradient = lambda t: MLEPolynomlialRegressionLossGradient(data, t, sigma_estimate)
         theta_estimates, k, f_vals, grads, errs = gradientDescent(theta, loss, loss_gradient, kmax=kmax,
-                                                                  verbose=True, use_backtracking=True)
+                                                                  verbose=False, use_backtracking=True)
 
         return theta_estimates[-1]
+
+    elif solving_strategy == "rmsprop":
+        theta = np.random.random((k,))
+        theta_estimates = rmsprop(theta, loss, loss_gradient, alpha=1e-3, kmax=kmax, verbose=False)
+
+        return theta_estimates
+
+    elif solving_strategy == "adam":
+        theta = np.random.random((k,))
+        theta_estimates = adam(theta, loss, loss_gradient, alpha=1e-3, kmax=kmax, verbose=False)
+
+        return theta_estimates
 
     else:
         theta = np.random.random((k,))
@@ -258,15 +271,15 @@ def MLEPolynomialRegression(data: typing.Tuple[np.ndarray, np.ndarray], k: int, 
         theta_estimates, f_vals, grads, errs = stochasticGradientDescent(f_pars_0=theta, f=loss,
                                                                          f_gradient=loss_gradient,
                                                                          data=(x, y), alpha=alpha, batch_size=100,
-                                                                         n_epochs=kmax, verbose=True)
+                                                                         n_epochs=kmax, verbose=False)
 
         return theta_estimates[-1]
 
 
 def MAPPolynomialRegression(data: typing.Tuple[np.ndarray, np.ndarray], k: int, regularization_parameter: float,
                             solving_strategy: str = "exact", alpha: float = 1e-3, kmax: int = 100) -> np.ndarray:
-    assert solving_strategy in ["exact", "gd", "sgd"], \
-        "Solving strategy must be one among \"exact\", \"gd\", and \"sgd\""
+    assert solving_strategy in ["exact", "gd", "sgd", "rmsprop", "adam"], \
+        "Solving strategy must be one among \"exact\", \"gd\", \"sgd\", \"rmsprop\", and \"adam\""
 
     x, y = data
     phi_x = classicalVandermondeMatrix(x, k)
@@ -276,14 +289,27 @@ def MAPPolynomialRegression(data: typing.Tuple[np.ndarray, np.ndarray], k: int, 
 
         return theta
 
-    elif solving_strategy == "gd":
+    loss = lambda t: MAPPolynomlialRegressionLoss(data, t, regularization_parameter)
+    loss_gradient = lambda t: MAPPolynomlialRegressionLossGradient(data, t, regularization_parameter)
+
+    if solving_strategy == "gd":
         theta = np.random.random((k,))
-        loss = lambda t: MAPPolynomlialRegressionLoss(data, t, regularization_parameter)
-        loss_gradient = lambda t: MAPPolynomlialRegressionLossGradient(data, t, regularization_parameter)
         theta_estimates, k, f_vals, grads, errs = gradientDescent(theta, loss, loss_gradient, kmax=kmax,
-                                                                  verbose=True, use_backtracking=True)
+                                                                  verbose=False, use_backtracking=True)
 
         return theta_estimates[-1]
+
+    elif solving_strategy == "rmsprop":
+        theta = np.random.random((k,))
+        theta_estimates = rmsprop(theta, loss, loss_gradient, alpha=1e-3, kmax=kmax, verbose=False)
+
+        return theta_estimates
+
+    elif solving_strategy == "adam":
+        theta = np.random.random((k,))
+        theta_estimates = adam(theta, loss, loss_gradient, alpha=1e-3, kmax=kmax, verbose=False)
+
+        return theta_estimates
 
     else:
         theta = np.random.random((k,))
@@ -292,7 +318,7 @@ def MAPPolynomialRegression(data: typing.Tuple[np.ndarray, np.ndarray], k: int, 
         theta_estimates, f_vals, grads, errs = stochasticGradientDescent(f_pars_0=theta, f=loss,
                                                                          f_gradient=loss_gradient,
                                                                          data=(x, y), alpha=alpha, batch_size=100,
-                                                                         n_epochs=kmax, verbose=True)
+                                                                         n_epochs=kmax, verbose=False)
 
         return theta_estimates[-1]
 
@@ -374,7 +400,7 @@ def MLEPolynomialRegressionPoisson(data: typing.Tuple[np.ndarray, np.ndarray], k
     elif solving_strategy == "gd":
         theta = np.random.random((k,))
         theta_estimates, k, f_vals, grads, errs = gradientDescent(theta, loss, loss_gradient, kmax=kmax,
-                                                                  verbose=True, use_backtracking=True)
+                                                                  verbose=False, use_backtracking=True)
 
         return theta_estimates[-1]
 
@@ -392,10 +418,12 @@ def MLEPolynomialRegressionPoisson(data: typing.Tuple[np.ndarray, np.ndarray], k
 
     else:
         theta = np.random.random((k,))
+        loss = lambda d, t: MAPPolynomlialRegressionPoissonLoss(d, t)
+        loss_gradient = lambda d, t: MAPPolynomlialRegressionPoissonLossGradient(d, t)
         theta_estimates, f_vals, grads, errs = stochasticGradientDescent(f_pars_0=theta, f=loss,
                                                                          f_gradient=loss_gradient,
                                                                          data=(x, y), alpha=alpha, batch_size=100,
-                                                                         n_epochs=kmax, verbose=True)
+                                                                         n_epochs=kmax, verbose=False)
 
         return theta_estimates[-1]
 
@@ -414,7 +442,7 @@ def MAPPolynomialRegressionPoisson(data: typing.Tuple[np.ndarray, np.ndarray], k
     if solving_strategy == "gd":
         theta = np.random.random((k,))
         theta_estimates, k, f_vals, grads, errs = gradientDescent(theta, loss, loss_gradient, kmax=kmax,
-                                                                  verbose=True, use_backtracking=True)
+                                                                  verbose=False, use_backtracking=True)
 
         return theta_estimates[-1]
 
@@ -431,10 +459,12 @@ def MAPPolynomialRegressionPoisson(data: typing.Tuple[np.ndarray, np.ndarray], k
         return theta_estimates
 
     else:
+        loss = lambda d, t: MAPPolynomlialRegressionPoissonLoss(d, t, regularization_parameter)
+        loss_gradient = lambda d, t: MAPPolynomlialRegressionPoissonLossGradient(d, t, regularization_parameter)
         theta = np.random.random((k,))
         theta_estimates, f_vals, grads, errs = stochasticGradientDescent(f_pars_0=theta, f=loss,
                                                                          f_gradient=loss_gradient,
                                                                          data=(x, y), alpha=alpha, batch_size=100,
-                                                                         n_epochs=kmax, verbose=True)
+                                                                         n_epochs=kmax, verbose=False)
 
         return theta_estimates[-1]
