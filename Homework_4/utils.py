@@ -229,7 +229,7 @@ def MAPPolynomlialRegressionLossGradient(data: typing.Tuple[np.ndarray, np.ndarr
     return (phi_x.T @ (f_theta - y) / n) + (regularization_parameter * theta) / n
 
 
-def MLEPolynomialRegression(data: typing.Tuple[np.ndarray, np.ndarray], k: int, sigma_estimate: float,
+def MLEPolynomialRegression(data: typing.Tuple[np.ndarray, np.ndarray], k: int, sigma_estimate: float = 1.0,
                             solving_strategy: str = "exact", alpha: float = 1e-3, kmax: int = 5000) -> np.ndarray:
     assert solving_strategy in ["exact", "gd", "sgd", "rmsprop", "adam"], \
         "Solving strategy must be one among \"exact\", \"gd\", \"sgd\", \"rmsprop\", and \"adam\""
@@ -431,15 +431,19 @@ def MLEPolynomialRegressionPoisson(data: typing.Tuple[np.ndarray, np.ndarray], k
 def MAPPolynomialRegressionPoisson(data: typing.Tuple[np.ndarray, np.ndarray], k: int,
                                    solving_strategy: str = "adam", regularization_parameter: float = 1.0,
                                    alpha: float = 1e-3, kmax: int = 500) -> np.ndarray:
-    assert solving_strategy in ["gd", "sgd", "rmsprop", "adam"], \
-        "Solving strategy must be one among \"gd\", \"sgd\", \"rmsprop\", and \"adam\""
+    assert solving_strategy in ["exact", "gd", "sgd", "rmsprop", "adam"], \
+        "Solving strategy must be one among \"exact\", \"gd\", \"sgd\", \"rmsprop\", and \"adam\""
 
     x, y = data
     phi_x = classicalVandermondeMatrix(x, k)
     loss = lambda t: MAPPolynomlialRegressionPoissonLoss(data, t, regularization_parameter)
     loss_gradient = lambda t: MAPPolynomlialRegressionPoissonLossGradient(data, t, regularization_parameter)
 
-    if solving_strategy == "gd":
+    if solving_strategy == "exact":
+        theta = np.linalg.inv(phi_x.T @ phi_x + regularization_parameter * np.eye(k, dtype=x.dtype)) @ phi_x.T @ y
+        return theta
+
+    elif solving_strategy == "gd":
         theta = np.random.random((k,))
         theta_estimates, k, f_vals, grads, errs = gradientDescent(theta, loss, loss_gradient, kmax=kmax,
                                                                   verbose=False, use_backtracking=True)
