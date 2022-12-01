@@ -1,7 +1,8 @@
 import typing
 
 import numpy as np
-import scipy as scp
+import scipy
+from scipy import stats
 
 
 def reachedConvergence(x: np.ndarray, x_estimate: np.ndarray, grad_x0: np.ndarray,
@@ -91,6 +92,43 @@ def stochasticGradientDescent(f_pars_0: np.ndarray, f: typing.Callable, f_gradie
         f_pars_estimates[i + 1] = f_pars_estimates[i, :] - alpha * grad
 
     return f_pars_estimates, f_vals, grads, errs
+
+
+def rmsprop(f_pars_0: np.ndarray, f: typing.Callable, f_gradient: typing.Callable, alpha: float = 1e-3,
+            epsilon: float = 1e-7, rho: float = 0.9, momentum: float = 0.9, kmax: int = 500, verbose: bool = True):
+    f_pars_estimate = f_pars_0.copy()
+    delta_f_pars = np.zeros_like(f_pars_0)
+    velocity = np.zeros_like(f_pars_0)
+    for k in range(kmax):
+        _loss_gradient = f_gradient(f_pars_estimate)
+        velocity = rho * velocity + (1 - rho) * _loss_gradient ** 2
+        if momentum == 0.0:
+            delta_f_pars = -(alpha / (np.sqrt(velocity + epsilon))) * _loss_gradient
+        else:
+            delta_f_pars = (momentum * delta_f_pars) - ((alpha / (np.sqrt(velocity + epsilon))) * _loss_gradient)
+        f_pars_estimate += delta_f_pars
+        if verbose and k % 100 == 0:
+            print("Step %i - The value of the loss is actually: %f" % (k, f(f_pars_estimate)))
+
+    return f_pars_estimate
+
+
+def adam(f_pars_0: np.ndarray, f: typing.Callable, f_gradient: typing.Callable, alpha: float = 1e-3,
+         epsilon: float = 1e-7, beta_1: float = 0.9, beta_2: float = 0.999, kmax: int = 500, verbose: bool = True):
+    f_pars_estimate = f_pars_0.copy()
+    momentum = np.zeros_like(f_pars_0)
+    velocity = np.zeros_like(f_pars_0)
+    for k in range(kmax):
+        _loss_gradient = f_gradient(f_pars_estimate)
+        momentum = beta_1 * momentum + (1 - beta_1) * _loss_gradient
+        velocity = beta_2 * velocity + (1 - beta_2) * _loss_gradient ** 2
+        momentum_hat = momentum / (1 - beta_1 ** (k + 1))
+        velocity_hat = velocity / (1 - beta_2 ** (k + 1))
+        f_pars_estimate -= (alpha / (np.sqrt(velocity_hat) + epsilon)) * momentum_hat
+        if verbose and k % 100 == 0:
+            print("Step %i - The value of the loss is actually: %f" % (k, f(f_pars_estimate)))
+
+    return f_pars_estimate
 
 
 def generalizedVandermondeMatrix(x: np.ndarray, functions: typing.List[typing.Callable]) -> np.ndarray:
@@ -205,7 +243,7 @@ def MLEPolynomialRegression(data: typing.Tuple[np.ndarray, np.ndarray], k: int, 
         return theta
 
     elif solving_strategy == "gd":
-        theta = np.random.normal(loc=0.0, scale=1.0, size=(k,))
+        theta = np.random.random((k,))
         loss = lambda t: MLEPolynomlialRegressionLoss(data, t, sigma_estimate)
         loss_gradient = lambda t: MLEPolynomlialRegressionLossGradient(data, t, sigma_estimate)
         theta_estimates, k, f_vals, grads, errs = gradientDescent(theta, loss, loss_gradient, kmax=kmax,
@@ -214,7 +252,7 @@ def MLEPolynomialRegression(data: typing.Tuple[np.ndarray, np.ndarray], k: int, 
         return theta_estimates[-1]
 
     else:
-        theta = np.random.normal(loc=0.0, scale=1.0, size=(k,))
+        theta = np.random.random((k,))
         loss = lambda d, t: MLEPolynomlialRegressionLoss(d, t, sigma_estimate)
         loss_gradient = lambda d, t: MLEPolynomlialRegressionLossGradient(d, t, sigma_estimate)
         theta_estimates, f_vals, grads, errs = stochasticGradientDescent(f_pars_0=theta, f=loss,
@@ -234,12 +272,12 @@ def MAPPolynomialRegression(data: typing.Tuple[np.ndarray, np.ndarray], k: int, 
     phi_x = classicalVandermondeMatrix(x, k)
 
     if solving_strategy == "exact":
-        theta = np.linalg.inv(phi_x.T @ phi_x + regularization_parameter * np.eye(k)) @ phi_x.T @ y
+        theta = np.linalg.inv(phi_x.T @ phi_x + regularization_parameter * np.eye(k, dtype=x.dtype)) @ phi_x.T @ y
 
         return theta
 
     elif solving_strategy == "gd":
-        theta = np.random.normal(loc=0.0, scale=1.0, size=(k,))
+        theta = np.random.random((k,))
         loss = lambda t: MAPPolynomlialRegressionLoss(data, t, regularization_parameter)
         loss_gradient = lambda t: MAPPolynomlialRegressionLossGradient(data, t, regularization_parameter)
         theta_estimates, k, f_vals, grads, errs = gradientDescent(theta, loss, loss_gradient, kmax=kmax,
@@ -248,7 +286,7 @@ def MAPPolynomialRegression(data: typing.Tuple[np.ndarray, np.ndarray], k: int, 
         return theta_estimates[-1]
 
     else:
-        theta = np.random.normal(loc=0.0, scale=1.0, size=(k,))
+        theta = np.random.random((k,))
         loss = lambda d, t: MAPPolynomlialRegressionLoss(d, t, regularization_parameter)
         loss_gradient = lambda d, t: MAPPolynomlialRegressionLossGradient(d, t, regularization_parameter)
         theta_estimates, f_vals, grads, errs = stochasticGradientDescent(f_pars_0=theta, f=loss,
@@ -275,7 +313,7 @@ def testProblemPoisson(k: int, n: int = 100, a: float = 0, b: float = 1,
     y = phi_x @ theta_true
     epsilon = np.random.poisson(y, y.shape[0])
 
-    return x, y + epsilon
+    return x, epsilon
 
 
 def MLEPolynomlialRegressionPoissonLoss(data: typing.Tuple[np.ndarray, np.ndarray], theta: np.ndarray):
@@ -284,7 +322,7 @@ def MLEPolynomlialRegressionPoissonLoss(data: typing.Tuple[np.ndarray, np.ndarra
     phi_x = classicalVandermondeMatrix(x, k)
     f_theta = phi_x @ theta
 
-    return np.sum(f_theta - y * np.log(f_theta), axis=0) * 1 / x.shape[0]
+    return np.sum(stats.poisson.logpmf(k=y, mu=f_theta), axis=0) / x.shape[0]
 
 
 def MLEPolynomlialRegressionPoissonLossGradient(data: typing.Tuple[np.ndarray, np.ndarray], theta: np.ndarray):
@@ -295,36 +333,108 @@ def MLEPolynomlialRegressionPoissonLossGradient(data: typing.Tuple[np.ndarray, n
     return np.sum(phi_x - (y.reshape((-1, 1)) / theta.reshape((1, -1))), axis=0) / x.shape[0]
 
 
+def MAPPolynomlialRegressionPoissonLoss(data: typing.Tuple[np.ndarray, np.ndarray], theta: np.ndarray,
+                                        regularization_parameter: float = 1.0):
+    x, y = data
+    k = theta.shape[0]
+    phi_x = classicalVandermondeMatrix(x, k)
+    f_theta = phi_x @ theta
+
+    return np.sum(stats.poisson.logpmf(k=y, mu=f_theta), axis=0) / x.shape[0] + \
+           regularization_parameter / 2 * np.linalg.norm(theta) ** 2
+
+
+def MAPPolynomlialRegressionPoissonLossGradient(data: typing.Tuple[np.ndarray, np.ndarray], theta: np.ndarray,
+                                                regularization_parameter: float = 1.0):
+    x, y = data
+    k = theta.shape[0]
+    phi_x = classicalVandermondeMatrix(x, k)
+
+    return np.sum(phi_x - (y.reshape((-1, 1)) / theta.reshape((1, -1))), axis=0) / x.shape[0] + \
+           regularization_parameter * theta
+
+
 def MLEPolynomialRegressionPoisson(data: typing.Tuple[np.ndarray, np.ndarray], k: int,
                                    solving_strategy: str = "exact", alpha: float = 1e-3,
-                                   kmax: int = 5000) -> np.ndarray:
-    assert solving_strategy in ["exact", "gd", "sgd"], \
-        "Solving strategy must be one among \"exact\", \"gd\", and \"sgd\""
+                                   kmax: int = 500) -> np.ndarray:
+    assert solving_strategy in ["exact", "gd", "sgd", "rmsprop", "adam"], \
+        "Solving strategy must be one among \"exact\", \"gd\", \"sgd\", \"rmsprop\", and \"adam\""
 
     x, y = data
     phi_x = classicalVandermondeMatrix(x, k)
 
+    loss = lambda t: MLEPolynomlialRegressionPoissonLoss(data, t)
+    loss_gradient = lambda t: MLEPolynomlialRegressionPoissonLossGradient(data, t)
+
     if solving_strategy == "exact":
-        theta = np.linalg.inv(phi_x.T @ phi_x) @ phi_x.T @ y * 0.5
+        theta = np.linalg.inv(phi_x.T @ phi_x) @ phi_x.T @ y
 
         return theta
 
     elif solving_strategy == "gd":
-        theta = np.random.normal(loc=0.0, scale=1.0, size=(k,))
-        loss = lambda t: MLEPolynomlialRegressionPoissonLoss(data, t)
-        loss_gradient = lambda t: MLEPolynomlialRegressionPoissonLossGradient(data, t)
+        theta = np.random.random((k,))
         theta_estimates, k, f_vals, grads, errs = gradientDescent(theta, loss, loss_gradient, kmax=kmax,
                                                                   verbose=True, use_backtracking=True)
 
-        return theta_estimates[-1] / 2
+        return theta_estimates[-1]
+
+    elif solving_strategy == "rmsprop":
+        theta = np.random.random((k,))
+        theta_estimates = rmsprop(theta, loss, loss_gradient, alpha=1e-3, kmax=kmax, verbose=False)
+
+        return theta_estimates
+
+    elif solving_strategy == "adam":
+        theta = np.random.random((k,))
+        theta_estimates = adam(theta, loss, loss_gradient, alpha=1e-3, kmax=kmax, verbose=False)
+
+        return theta_estimates
 
     else:
-        theta = np.random.normal(loc=0.0, scale=1.0, size=(k,))
-        loss = lambda d, t: MLEPolynomlialRegressionPoissonLoss(d, t)
-        loss_gradient = lambda d, t: MLEPolynomlialRegressionPoissonLossGradient(d, t)
+        theta = np.random.random((k,))
         theta_estimates, f_vals, grads, errs = stochasticGradientDescent(f_pars_0=theta, f=loss,
                                                                          f_gradient=loss_gradient,
                                                                          data=(x, y), alpha=alpha, batch_size=100,
                                                                          n_epochs=kmax, verbose=True)
 
-        return theta_estimates[-1] / 2
+        return theta_estimates[-1]
+
+
+def MAPPolynomialRegressionPoisson(data: typing.Tuple[np.ndarray, np.ndarray], k: int,
+                                   solving_strategy: str = "adam", regularization_parameter: float = 1.0,
+                                   alpha: float = 1e-3, kmax: int = 500) -> np.ndarray:
+    assert solving_strategy in ["gd", "sgd", "rmsprop", "adam"], \
+        "Solving strategy must be one among \"gd\", \"sgd\", \"rmsprop\", and \"adam\""
+
+    x, y = data
+    phi_x = classicalVandermondeMatrix(x, k)
+    loss = lambda t: MAPPolynomlialRegressionPoissonLoss(data, t, regularization_parameter)
+    loss_gradient = lambda t: MAPPolynomlialRegressionPoissonLossGradient(data, t, regularization_parameter)
+
+    if solving_strategy == "gd":
+        theta = np.random.random((k,))
+        theta_estimates, k, f_vals, grads, errs = gradientDescent(theta, loss, loss_gradient, kmax=kmax,
+                                                                  verbose=True, use_backtracking=True)
+
+        return theta_estimates[-1]
+
+    elif solving_strategy == "rmsprop":
+        theta = np.random.random((k,))
+        theta_estimates = rmsprop(theta, loss, loss_gradient, alpha=1e-3, kmax=kmax, verbose=False)
+
+        return theta_estimates
+
+    elif solving_strategy == "adam":
+        theta = np.random.random((k,))
+        theta_estimates = adam(theta, loss, loss_gradient, alpha=1e-3, kmax=kmax, verbose=False)
+
+        return theta_estimates
+
+    else:
+        theta = np.random.random((k,))
+        theta_estimates, f_vals, grads, errs = stochasticGradientDescent(f_pars_0=theta, f=loss,
+                                                                         f_gradient=loss_gradient,
+                                                                         data=(x, y), alpha=alpha, batch_size=100,
+                                                                         n_epochs=kmax, verbose=True)
+
+        return theta_estimates[-1]
